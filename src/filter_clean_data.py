@@ -12,3 +12,6 @@ filtered_df = df[df['region'].isin(regions_to_keep)]
 
 # Save the filtered DataFrame to a new CSV file
 filtered_df.to_csv('datasets/clean/clean_data.csv', index=False) 
+
+# Save the filtered DataFrame to a pickle file
+filtered_df.to_pickle('datasets/clean/clean_data.pkl')
