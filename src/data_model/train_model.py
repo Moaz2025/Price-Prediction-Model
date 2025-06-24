@@ -50,7 +50,7 @@ def eval_model(model, X, y):
 
 def train_eval_save_model():
 
-    clean_data_path = Path.cwd() / "datasets" / "clean" / "clean_data_egypt.csv"
+    clean_data_path = Path.cwd() / "datasets" / "clean" / "clean_data.csv"
     clean_df = pd.read_csv(clean_data_path)
 
     xgb_features = ['region', 'netHabitableSurface', 'rooms', 'bathrooms'
