@@ -96,7 +96,7 @@ rmse = np.sqrt(mean_squared_error(y_true, y_pred))
 # === Save model ===
 joblib.dump(opt.best_estimator_, "models/ensemble_model.pkl")
 
-print("\n\n✅ Final Model Trained and Saved!")
+print("\n\nFinal Model Trained and Saved!")
 print(f"Best CV R²: {opt.best_score_:.4f}")
 print(f"Test R²: {r2:.4f}")
 print(f"Test RMSE: {rmse:,.2f} EGP")

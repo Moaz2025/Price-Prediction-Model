@@ -1,2 +1,5 @@
 __pycache__/
 /datasets
+region_medians.pkl
+ensemble_model.pkl
+*.png
