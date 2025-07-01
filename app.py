@@ -1,46 +1,66 @@
-from fastapi.exceptions import RequestValidationError
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import joblib
-from pathlib import Path
 import pandas as pd
+import numpy as np
+from typing import Literal
+import uvicorn
 
-from src.data_model.data_model import Property
+# === Load model and region encoding ===
+model = joblib.load("models/ensemble_model.pkl")
+region_medians = joblib.load("models/region_medians.pkl")
+fallback_median = np.median(list(region_medians.values()))
 
-model_path = Path.cwd() / "models" / "model.pkl"
-model = joblib.load(model_path)
+# === FastAPI app ===
+app = FastAPI(title="Property Price Prediction")
 
-app = FastAPI()
+# === Request schema ===
+class PropertyRequest(BaseModel):
+    region: str
+    netHabitableSurface: float
+    rooms: int
+    bathrooms: int
+    finish_type: str
+    type: str
+    view: str
+    floor: int
+    building_year: int
 
-@app.get("/")
-def read_root():
-    return {"response": "Ready!"}
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    key = exc.errors()[0]['loc'][1]
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"error": f"{key} {exc.errors()[0]['msg']}"},
-    )
-
+# === Enable CORS ===
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/predict")
-def prediction(prop: Property):
+def predict_price(data: PropertyRequest):
     try:
-        dict_prop = jsonable_encoder(prop)
-        dict_prop = pd.DataFrame([dict_prop])
-        y_pred = model.predict(dict_prop)
-        price = float(y_pred[0])
-        return {
-            "prediction": price,
-            "status_code": status.HTTP_200_OK
-        }
-    except RequestValidationError as e:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=e,
-        )
+        # Convert to DataFrame
+        X_new = pd.DataFrame([data.dict()])
+
+        # Preserve building_year
+        building_year_temp = X_new['building_year'].copy()
+
+        # Feature engineering
+        X_new['is_new_building'] = (building_year_temp > 2010).astype(int)
+        X_new['age'] = 2025 - building_year_temp
+        X_new['density_ratio'] = X_new['rooms'] / (X_new['netHabitableSurface'] + 1e-3)
+        X_new['region_encoded'] = X_new['region'].map(region_medians).fillna(fallback_median)
+        X_new.drop(columns=['building_year'], inplace=True)
+
+        # Predict
+        log_price = model.predict(X_new)
+        predicted_price = float(np.expm1(log_price)[0])
+
+        return {int(predicted_price)}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# === Run server on port 8081 ===
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8081, reload=True)
